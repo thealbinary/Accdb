@@ -689,6 +689,34 @@ def cmd_info(args):
         try: print(f"  {t} ({len(db.rows(t))} rows)")
         except Exception as e: print(f"  {t} (error: {e})")
 
+    # Check if there is any readable content in VBA/LVAL pages.
+    # If so, nudge the user to check — regardless of what the content looks like.
+    reader = db.parser.reader
+    has_vba_content = False
+    for pn in range(reader.num_pages):
+        try:
+            pg = reader.read_page(pn)
+        except Exception:
+            continue
+        if pg[0] not in (0x01, 0x08, 0x09):
+            continue
+        import re as _re
+        text = pg.decode('latin-1', errors='replace')
+        for m in _re.finditer(r'[ -~]{8,}', text):
+            s = m.group().strip()
+            if s and len(set(s)) >= 3:
+                has_vba_content = True
+                break
+        if has_vba_content:
+            break
+
+    if has_vba_content:
+        print()
+        p_flag = f" -p <password>" if db.encrypted else ""
+        print(f"[*] This database contains VBA/macro content.")
+        print(f"    It may include credentials, queries, or connection strings not visible in tables.")
+        print(f"    Run: accdbpy.py vba {args.file}{p_flag}")
+
 def cmd_vba(args):
     """
     Extract strings from LVAL (large value / memo/OLE) pages in the database.
